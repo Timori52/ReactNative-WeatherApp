@@ -8,6 +8,10 @@ The complete source code for this project is available at:
 - GitHub: [https://github.com/Timori52/ReactNative-WeatherApp.git]
 (https://github.com/Timori52/ReactNative-WeatherApp.git)
 
+#DEMO
+
+    ![Project screenshot](assets/images/AppScreenshot.png)
+
 ## Technologies Used
 
 - **React Native**: Framework for building cross-platform mobile applications
