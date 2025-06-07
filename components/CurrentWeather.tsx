@@ -1,20 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useState } from 'react';
-import { TemperatureUnit, TEMPERATURE_UNIT_KEY } from '../app/weatherSettings';
+import { TemperatureUnit } from '../app/weatherSettings';
 
 type CurrentWeatherProps = {
   location: string;
   temperature: number;
   condition: string;
-  high: number;
-  low: number;
   date: string;
   iconSource: any;
-  humidity?: number;
-  windSpeed?: number;
+  unit: TemperatureUnit;
+  feelsLike?: number;
 };
 
 // Helper function to format temperature
@@ -27,49 +23,11 @@ const CurrentWeather: React.FC<CurrentWeatherProps> = ({
   location,
   temperature,
   condition,
-  high,
-  low,
   date,
   iconSource,
-  humidity,
-  windSpeed,
+  unit = 'celsius', // Default to celsius if not provided
+  feelsLike,
 }) => {
-  const [temperatureUnit, setTemperatureUnit] = useState<TemperatureUnit>('celsius');
-
-  // Load temperature unit setting
-  useEffect(() => {
-    const loadTemperatureUnit = async () => {
-      try {
-        const savedUnit = await AsyncStorage.getItem(TEMPERATURE_UNIT_KEY);
-        if (savedUnit && (savedUnit === 'celsius' || savedUnit === 'fahrenheit')) {
-          setTemperatureUnit(savedUnit as TemperatureUnit);
-        }
-      } catch (error) {
-        console.error('Error loading temperature unit:', error);
-      }
-    };
-
-    loadTemperatureUnit();
-
-    // Listen for changes to the temperature unit
-    const intervalId = setInterval(async () => {
-      try {
-        const savedUnit = await AsyncStorage.getItem(TEMPERATURE_UNIT_KEY);
-        if (savedUnit && 
-            (savedUnit === 'celsius' || savedUnit === 'fahrenheit') && 
-            savedUnit !== temperatureUnit) {
-          setTemperatureUnit(savedUnit as TemperatureUnit);
-        }
-      } catch (error) {
-        console.error('Error checking temperature unit:', error);
-      }
-    }, 1000);
-
-    return () => clearInterval(intervalId);
-  }, [temperatureUnit]);
-
-  const speedUnit = temperatureUnit === 'celsius' ? 'm/s' : 'mph';
-
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -88,32 +46,11 @@ const CurrentWeather: React.FC<CurrentWeatherProps> = ({
         />
       </View>
       
-      <Text style={styles.temperature}>{formatTemp(temperature, temperatureUnit)}</Text>
-      <Text style={styles.condition}>{condition}</Text>
-      
-      <View style={styles.highLowContainer}>
-        <Text style={styles.highLow}>H:{formatTemp(high, temperatureUnit)}</Text>
-        <Text style={styles.highLow}>L:{formatTemp(low, temperatureUnit)}</Text>
-      </View>
-      
-      {/* Extra weather details */}
-      {(humidity !== undefined || windSpeed !== undefined) && (
-        <View style={styles.extraDetails}>
-          {humidity !== undefined && (
-            <View style={styles.detailItem}>
-              <Ionicons name="water" size={16} color="white" />
-              <Text style={styles.detailText}>{humidity}%</Text>
-            </View>
-          )}
-          
-          {windSpeed !== undefined && (
-            <View style={styles.detailItem}>
-              <Ionicons name="speedometer" size={16} color="white" />
-              <Text style={styles.detailText}>{windSpeed} {speedUnit}</Text>
-            </View>
-          )}
-        </View>
+      <Text style={styles.temperature}>{formatTemp(temperature, unit)}</Text>
+      {feelsLike && (
+        <Text style={styles.feelsLike}>Feels like {formatTemp(feelsLike, unit)}</Text>
       )}
+      <Text style={styles.condition}>{condition}</Text>
       
       <Text style={styles.date}>{date}</Text>
     </View>
@@ -123,7 +60,7 @@ const CurrentWeather: React.FC<CurrentWeatherProps> = ({
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    paddingTop: 50,
+    paddingTop: 60,
     paddingBottom: 30,
   },
   header: {
@@ -160,36 +97,18 @@ const styles = StyleSheet.create({
     lineHeight: 100,
     marginLeft: 20,
   },
+  feelsLike: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 18,
+    fontWeight: '500',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
   condition: {
     color: 'white',
     fontSize: 22,
     fontWeight: '600',
     marginTop: 5,
-  },
-  highLowContainer: {
-    flexDirection: 'row',
-    marginTop: 10,
-  },
-  highLow: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '600',
-    marginHorizontal: 5,
-  },
-  extraDetails: {
-    flexDirection: 'row',
-    marginTop: 15,
-    width: '70%',
-    justifyContent: 'space-around',
-  },
-  detailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  detailText: {
-    color: 'white',
-    marginLeft: 5,
-    fontSize: 14,
   },
   date: {
     color: 'white',

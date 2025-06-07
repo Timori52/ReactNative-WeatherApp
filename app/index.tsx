@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, StatusBar, ScrollView, Alert, Text } from 'react-native';
+import { View, StyleSheet, StatusBar, ScrollView, Alert, Text, AppState } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
@@ -10,6 +10,8 @@ import DailyForecast from '../components/DailyForecast';
 import AddButton from '../components/AddButton';
 import CitySearchModal from '../components/CitySearchModal';
 import SplashScreen from '../components/SplashScreen';
+import AirQualitySection from '../components/AirQualitySection';
+import WeatherMetricsGrid from '../components/WeatherMetricsGrid';
 
 // Import the new weather API service
 import weatherApi, { celsiusToFahrenheit, fahrenheitToCelsius } from '../services/weatherApi';
@@ -31,7 +33,6 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [temperatureUnit, setTemperatureUnit] = useState<TemperatureUnit>('celsius');
   const [isUsingLocation, setIsUsingLocation] = useState(false);
-  const [previousUnit, setPreviousUnit] = useState<TemperatureUnit>('celsius');
 
   // Handle splash screen completion
   const handleSplashComplete = () => {
@@ -42,15 +43,14 @@ export default function HomeScreen() {
   const convertTemperatures = (fromUnit: TemperatureUnit, toUnit: TemperatureUnit) => {
     if (fromUnit === toUnit) return;
     
+    // Select the correct conversion function
+    const convert = fromUnit === 'celsius' ? celsiusToFahrenheit : fahrenheitToCelsius;
+    
     // Convert current weather data
     if (currentWeather) {
-      const convert = fromUnit === 'fahrenheit' ? fahrenheitToCelsius : celsiusToFahrenheit;
-    
       setCurrentWeather({
         ...currentWeather,
-        temperature: convert(currentWeather.temperature),
-        high: convert(currentWeather.high),
-        low: convert(currentWeather.low)
+        temperature: convert(currentWeather.temperature)
       });
     }
     
@@ -58,9 +58,7 @@ export default function HomeScreen() {
     if (hourlyForecast.length > 0) {
       const convertedHourly = hourlyForecast.map(item => ({
         ...item,
-        temperature: fromUnit === 'fahrenheit' 
-          ? fahrenheitToCelsius(item.temperature) 
-          : celsiusToFahrenheit(item.temperature)
+        temperature: convert(item.temperature)
       }));
       
       setHourlyForecast(convertedHourly);
@@ -70,12 +68,8 @@ export default function HomeScreen() {
     if (dailyForecast.length > 0) {
       const convertedDaily = dailyForecast.map(item => ({
         ...item,
-        high: fromUnit === 'fahrenheit' 
-          ? fahrenheitToCelsius(item.high) 
-          : celsiusToFahrenheit(item.high),
-        low: fromUnit === 'fahrenheit' 
-          ? fahrenheitToCelsius(item.low) 
-          : celsiusToFahrenheit(item.low)
+        high: convert(item.high),
+        low: convert(item.low)
       }));
       
       setDailyForecast(convertedDaily);
@@ -89,7 +83,6 @@ export default function HomeScreen() {
         const savedUnit = await AsyncStorage.getItem(TEMPERATURE_UNIT_KEY);
         if (savedUnit && (savedUnit === 'celsius' || savedUnit === 'fahrenheit')) {
           setTemperatureUnit(savedUnit as TemperatureUnit);
-          setPreviousUnit(savedUnit as TemperatureUnit);
         }
       } catch (error) {
         console.error('Error loading temperature unit:', error);
@@ -97,31 +90,54 @@ export default function HomeScreen() {
     };
 
     loadTemperatureUnit();
+  }, []);
 
-    // Listen for changes to the temperature unit
-    const intervalId = setInterval(async () => {
+
+
+  // Listen for temperature unit changes - using a ref to make this safe with useEffect
+  useEffect(() => {
+    // Create a check function that uses the latest temperatureUnit state
+    const checkForChanges = async () => {
       try {
         const savedUnit = await AsyncStorage.getItem(TEMPERATURE_UNIT_KEY);
+        
         if (savedUnit && 
             (savedUnit === 'celsius' || savedUnit === 'fahrenheit') && 
             savedUnit !== temperatureUnit) {
           
-          // If we have weather data, convert the temperatures
-          if (currentWeather) {
-            convertTemperatures(temperatureUnit, savedUnit as TemperatureUnit);
-          }
+          console.log(`Temperature unit changed from ${temperatureUnit} to ${savedUnit}`);
           
-          // Update the unit state
-          setPreviousUnit(temperatureUnit);
+          // Convert temperatures before changing the unit
+          convertTemperatures(temperatureUnit, savedUnit as TemperatureUnit);
           setTemperatureUnit(savedUnit as TemperatureUnit);
         }
       } catch (error) {
         console.error('Error checking temperature unit:', error);
       }
-    }, 1000);
+    };
+    
+    // Check for changes immediately
+    checkForChanges();
+    
+    // Check for changes when app state changes
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        checkForChanges();
+      }
+    });
 
-    return () => clearInterval(intervalId);
-  }, [temperatureUnit, currentWeather, hourlyForecast, dailyForecast]);
+    // Also periodically check while app is active (every 0.5 seconds)
+    const intervalId = setInterval(() => {
+      if (AppState.currentState === 'active') {
+        checkForChanges();
+      }
+    }, 500);
+
+    return () => {
+      subscription.remove();
+      clearInterval(intervalId);
+    };
+  }, [temperatureUnit]);
 
   // Get weather by city name
   const fetchWeatherData = async () => {
@@ -201,7 +217,6 @@ export default function HomeScreen() {
 
   // Fetch weather data on component mount and when city or unit changes
   useEffect(() => {
-    // Initial data fetch
     fetchWeatherData();
   }, [selectedCity, temperatureUnit]);
 
@@ -239,15 +254,36 @@ export default function HomeScreen() {
           </View>
         ) : (
           <>
-            {currentWeather && <CurrentWeather {...currentWeather} />}
+            {currentWeather && <CurrentWeather {...currentWeather} unit={temperatureUnit} />}
             
             <View style={styles.divider} />
             
-            {hourlyForecast.length > 0 && <HourlyForecast data={hourlyForecast} />}
+            {hourlyForecast.length > 0 && <HourlyForecast data={hourlyForecast} unit={temperatureUnit} />}
             
             <View style={styles.divider} />
             
-            {dailyForecast.length > 0 && <DailyForecast data={dailyForecast} />}
+            {dailyForecast.length > 0 && <DailyForecast data={dailyForecast} unit={temperatureUnit} />}
+            
+            {currentWeather && currentWeather.aqi && (
+              <>
+                <View style={styles.divider} />
+                <AirQualitySection aqi={currentWeather.aqi} />
+              </>
+            )}
+            
+            {currentWeather && (
+              <>
+                <View style={styles.divider} />
+                <WeatherMetricsGrid 
+                  humidity={currentWeather.humidity}
+                  pressure={currentWeather.pressure}
+                  visibility={currentWeather.visibility}
+                  windSpeed={currentWeather.windSpeed}
+                  uvIndex={currentWeather.uvIndex}
+                  dewPoint={currentWeather.dewPoint}
+                />
+              </>
+            )}
           </>
         )}
       </ScrollView>

@@ -1,11 +1,12 @@
 import React from 'react';
 import { Stack } from "expo-router";
-// import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import "../global.css"
 
 export default function RootLayout() {
   return (
     <>
+      <SafeAreaProvider>
       <Stack 
         screenOptions={{
           headerShown: false,
@@ -13,6 +14,7 @@ export default function RootLayout() {
           animation: 'slide_from_right',
         }} 
       />
+      </SafeAreaProvider>
     </>
   );
 }

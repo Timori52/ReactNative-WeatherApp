@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { TemperatureUnit } from '../app/weatherSettings';
 
@@ -13,14 +12,16 @@ export interface WeatherData {
   location: string;
   temperature: number;
   condition: string;
-  high: number;
-  low: number;
   date: string;
   iconSource: string;
-  humidity: number;
-  windSpeed: number;
   sunrise: number;
   sunset: number;
+  aqi?: number;  // Air Quality Index
+  humidity?: number;
+  pressure?: number;
+  visibility?: number;
+  windSpeed?: number;
+  feelsLike?: number;
 }
 
 export interface HourlyForecastItem {
@@ -121,6 +122,21 @@ const getUnitsParam = (unit: TemperatureUnit): string => {
   return unit === 'celsius' ? 'metric' : 'imperial';
 };
 
+// Get the AQI category based on the value
+export const getAqiCategory = (aqi: number): { category: string; color: string } => {
+  if (aqi <= 50) {
+    return { category: 'Good', color: '#00E400' };
+  } else if (aqi <= 100) {
+    return { category: 'Moderate', color: '#FFFF00' };
+  } else if (aqi <= 200) {
+    return { category: 'Poor', color: '#FF7E00' };
+  } else if (aqi <= 300) {
+    return { category: 'Unhealthy', color: '#FF0000' };
+  } else {
+    return { category: 'Hazardous', color: '#7E0023' };
+  }
+};
+
 // Weather service for API calls
 class WeatherService {
   // Search for cities
@@ -150,8 +166,8 @@ class WeatherService {
   // Get weather data by coordinates
   async getWeatherByCoordinates(lat: number, lon: number, unit: TemperatureUnit = 'celsius'): Promise<LocationWeatherData> {
     try {
-      // Make parallel requests for current weather and forecast
-      const [currentResponse, forecastResponse] = await Promise.all([
+      // Make parallel requests for current weather, forecast, and air pollution
+      const [currentResponse, forecastResponse, airPollutionResponse] = await Promise.all([
         axios.get(`${BASE_URL}/weather`, {
           params: {
             lat,
@@ -167,23 +183,42 @@ class WeatherService {
             appid: API_KEY,
             units: getUnitsParam(unit)
           }
+        }),
+        axios.get(`${BASE_URL}/air_pollution`, {
+          params: {
+            lat,
+            lon,
+            appid: API_KEY
+          }
         })
       ]);
 
       // Process current weather data
       const currentData = currentResponse.data;
+      const airData = airPollutionResponse.data;
+      
+      // Convert OpenWeatherMap AQI (1-5) to a more standard scale
+      const aqiValue = airData.list[0].main.aqi;
+      const mappedAqi = aqiValue === 1 ? 25 : 
+                        aqiValue === 2 ? 75 : 
+                        aqiValue === 3 ? 150 : 
+                        aqiValue === 4 ? 218 : 
+                        aqiValue === 5 ? 300 : 0;
+      
       const current: WeatherData = {
         location: currentData.name,
         temperature: Math.round(currentData.main.temp),
         condition: currentData.weather[0].main,
-        high: Math.ceil(currentData.main.temp_max),
-        low: Math.floor(currentData.main.temp_min),
         date: formatDate(currentData.dt),
         iconSource: mapWeatherIconToLocal(currentData.weather[0].icon),
-        humidity: currentData.main.humidity,
-        windSpeed: currentData.wind.speed,
         sunrise: currentData.sys.sunrise,
-        sunset: currentData.sys.sunset
+        sunset: currentData.sys.sunset,
+        aqi: mappedAqi,
+        humidity: currentData.main.humidity,
+        pressure: currentData.main.pressure,
+        visibility: currentData.visibility ? Math.round(currentData.visibility / 1000) : undefined, // Convert to km
+        windSpeed: currentData.wind ? Math.round(currentData.wind.speed * 3.6) : undefined, // Convert to km/h
+        feelsLike: Math.round(currentData.main.feels_like),
       };
 
       // Process hourly forecast data
@@ -271,29 +306,25 @@ class WeatherService {
   // Get current weather data for a location
   async getCurrentWeather(city: string, unit: TemperatureUnit = 'celsius'): Promise<WeatherData> {
     try {
-      const response = await axios.get(`${BASE_URL}/weather`, {
+      // First get coordinates for the city
+      const geoResponse = await axios.get(`${GEO_URL}/direct`, {
         params: {
           q: city,
-          appid: API_KEY,
-          units: getUnitsParam(unit)
+          limit: 1,
+          appid: API_KEY
         }
       });
-
-      const data = response.data;
       
-      return {
-        location: data.name,
-        temperature: Math.round(data.main.temp),
-        condition: data.weather[0].main,
-        high: Math.round(data.main.temp_max),
-        low: Math.round(data.main.temp_min),
-        date: formatDate(data.dt),
-        iconSource: mapWeatherIconToLocal(data.weather[0].icon),
-        humidity: data.main.humidity,
-        windSpeed: data.wind.speed,
-        sunrise: data.sys.sunrise,
-        sunset: data.sys.sunset
-      };
+      if (geoResponse.data.length === 0) {
+        throw new Error('City not found');
+      }
+      
+      const { lat, lon } = geoResponse.data[0];
+      
+      // Use the existing getWeatherByCoordinates method to get complete weather data
+      const weatherData = await this.getWeatherByCoordinates(lat, lon, unit);
+      return weatherData.current;
+      
     } catch (error) {
       console.error('Error fetching current weather:', error);
       throw error;
@@ -303,24 +334,25 @@ class WeatherService {
   // Get hourly forecast for a location
   async getHourlyForecast(city: string, unit: TemperatureUnit = 'celsius'): Promise<HourlyForecastItem[]> {
     try {
-      const response = await axios.get(`${BASE_URL}/forecast`, {
+      // First get coordinates for the city
+      const geoResponse = await axios.get(`${GEO_URL}/direct`, {
         params: {
           q: city,
-          appid: API_KEY,
-          units: getUnitsParam(unit),
-          cnt: 8 // Limit to 8 results (24 hours)
+          limit: 1,
+          appid: API_KEY
         }
       });
-
-      // Transform API data to our format
-      const hourlyData = response.data.list.map((item: any, index: number) => ({
-        hour: index === 0 ? 'Now' : formatHour(item.dt),
-        temperature: Math.round(item.main.temp),
-        iconSource: mapWeatherIconToLocal(item.weather[0].icon),
-        isNow: index === 0
-      }));
-
-      return hourlyData;
+      
+      if (geoResponse.data.length === 0) {
+        throw new Error('City not found');
+      }
+      
+      const { lat, lon } = geoResponse.data[0];
+      
+      // Use the existing getWeatherByCoordinates method
+      const weatherData = await this.getWeatherByCoordinates(lat, lon, unit);
+      return weatherData.hourly;
+      
     } catch (error) {
       console.error('Error fetching hourly forecast:', error);
       throw error;
@@ -330,76 +362,25 @@ class WeatherService {
   // Get daily forecast for a location
   async getDailyForecast(city: string, unit: TemperatureUnit = 'celsius'): Promise<DailyForecastData[]> {
     try {
-      // Use the 5-day forecast endpoint
-      const response = await axios.get(`${BASE_URL}/forecast`, {
+      // First get coordinates for the city
+      const geoResponse = await axios.get(`${GEO_URL}/direct`, {
         params: {
           q: city,
-          appid: API_KEY,
-          units: getUnitsParam(unit)
+          limit: 1,
+          appid: API_KEY
         }
       });
-
-      // Group forecast by day
-      const dailyData: Record<string, any> = {};
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayTimestamp = today.getTime();
       
-      // Process each forecast entry
-      response.data.list.forEach((item: any) => {
-        const date = new Date(item.dt * 1000);
-        date.setHours(0, 0, 0, 0);
-        
-        // Skip today's forecast since we already have current weather
-        if (date.getTime() === todayTimestamp) {
-          return;
-        }
-        
-        const dateKey = getDateKey(item.dt);
-        
-        if (!dailyData[dateKey]) {
-          dailyData[dateKey] = {
-            temps: [],
-            icons: [],
-            day: formatDay(item.dt),
-            timestamp: item.dt, // Save timestamp to sort by date later
-            dateObj: date // Save date object for sorting
-          };
-        }
-        
-        dailyData[dateKey].temps.push(item.main.temp);
-        dailyData[dateKey].icons.push(item.weather[0].icon);
-      });
-
-      // Convert to array and sort by date
-      const sortedDays = Object.values(dailyData)
-        .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime())
-        .slice(0, 5); // Limit to 5 days
-
-      // Process daily data
-      return sortedDays.map((day: any) => {
-        // Find most common icon for the day
-        const iconCounts: Record<string, number> = {};
-        day.icons.forEach((icon: string) => {
-          iconCounts[icon] = (iconCounts[icon] || 0) + 1;
-        });
-        
-        const iconEntries = Object.entries(iconCounts);
-        const mostCommonIcon = iconEntries.length > 0 
-          ? iconEntries.sort((a, b) => b[1] - a[1])[0][0]
-          : '01d'; // Default icon if none found
-
-        // Calculate high and low temps
-        const high = Math.round(Math.max(...day.temps));
-        const low = Math.round(Math.min(...day.temps));
-
-        return {
-          day: day.day,
-          iconSource: mapWeatherIconToLocal(mostCommonIcon),
-          high,
-          low
-        };
-      });
+      if (geoResponse.data.length === 0) {
+        throw new Error('City not found');
+      }
+      
+      const { lat, lon } = geoResponse.data[0];
+      
+      // Use the existing getWeatherByCoordinates method
+      const weatherData = await this.getWeatherByCoordinates(lat, lon, unit);
+      return weatherData.daily;
+      
     } catch (error) {
       console.error('Error fetching daily forecast:', error);
       throw error;

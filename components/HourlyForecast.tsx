@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { TemperatureUnit, TEMPERATURE_UNIT_KEY } from '../app/weatherSettings';
+import { TemperatureUnit } from '../app/weatherSettings';
 
 type HourlyForecastItem = {
   hour: string;
@@ -12,6 +11,7 @@ type HourlyForecastItem = {
 
 type HourlyForecastProps = {
   data: HourlyForecastItem[];
+  unit: TemperatureUnit;
 };
 
 // Helper function to format temperature
@@ -20,41 +20,7 @@ const formatTemp = (temp: number, unit: TemperatureUnit): string => {
   return `${temp}${symbol}`;
 };
 
-const HourlyForecast: React.FC<HourlyForecastProps> = ({ data }) => {
-  const [temperatureUnit, setTemperatureUnit] = useState<TemperatureUnit>('celsius');
-
-  // Load temperature unit setting
-  useEffect(() => {
-    const loadTemperatureUnit = async () => {
-      try {
-        const savedUnit = await AsyncStorage.getItem(TEMPERATURE_UNIT_KEY);
-        if (savedUnit && (savedUnit === 'celsius' || savedUnit === 'fahrenheit')) {
-          setTemperatureUnit(savedUnit as TemperatureUnit);
-        }
-      } catch (error) {
-        console.error('Error loading temperature unit:', error);
-      }
-    };
-
-    loadTemperatureUnit();
-
-    // Listen for changes to the temperature unit
-    const intervalId = setInterval(async () => {
-      try {
-        const savedUnit = await AsyncStorage.getItem(TEMPERATURE_UNIT_KEY);
-        if (savedUnit && 
-            (savedUnit === 'celsius' || savedUnit === 'fahrenheit') && 
-            savedUnit !== temperatureUnit) {
-          setTemperatureUnit(savedUnit as TemperatureUnit);
-        }
-      } catch (error) {
-        console.error('Error checking temperature unit:', error);
-      }
-    }, 1000);
-
-    return () => clearInterval(intervalId);
-  }, [temperatureUnit]);
-
+const HourlyForecast: React.FC<HourlyForecastProps> = ({ data, unit = 'celsius' }) => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Today</Text>
@@ -82,7 +48,7 @@ const HourlyForecast: React.FC<HourlyForecastProps> = ({ data }) => {
               />
             </View>
             <Text style={[styles.tempText, item.isNow && styles.nowText]}>
-              {formatTemp(item.temperature, temperatureUnit)}
+              {formatTemp(item.temperature, unit)}
             </Text>
           </View>
         ))}
