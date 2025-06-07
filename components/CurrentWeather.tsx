@@ -13,8 +13,8 @@ type CurrentWeatherProps = {
   feelsLike?: number;
 };
 
-// Helper function to format temperature
-const formatTemp = (temp: number, unit: TemperatureUnit): string => {
+// function to format temperature
+export const formatTemp = (temp: number, unit: TemperatureUnit): string => {
   const symbol = unit === 'celsius' ? '°C' : '°F';
   return `${temp}${symbol}`;
 };

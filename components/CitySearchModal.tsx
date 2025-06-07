@@ -69,7 +69,7 @@ const CitySearchModal: React.FC<CitySearchModalProps> = ({
         POPULAR_CITIES.map(async (city) => {
           try {
             const results = await weatherApi.searchCities(city);
-            return results[0]; // Take the first result for each popular city
+            return results[0]; // Taking the first result for each popular city
           } catch (error) {
             console.error(`Error fetching data for ${city}:`, error);
             return null;
@@ -209,7 +209,7 @@ const CitySearchModal: React.FC<CitySearchModalProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#6908d4',
   },
   header: {
     flexDirection: 'row',

@@ -9,7 +9,7 @@ type AirQualitySectionProps = {
 const AirQualitySection: React.FC<AirQualitySectionProps> = ({ aqi }) => {
   const { category, color } = getAqiCategory(aqi);
   
-  // Calculate the progress percentage based on AQI (0-500 scale)
+  // Calculate the progress percentage
   const progressPercentage = Math.min(aqi / 500 * 100, 100);
   
   return (

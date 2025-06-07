@@ -238,7 +238,7 @@ export default function HomeScreen() {
   // Main content rendering
   return (
     <LinearGradient
-      colors={['#1DAEFF', '#C5EEFF']}
+      colors={['#6908d4', '#e3ccfd']}
       start={{ x: 0, y: 1 }}
       end={{ x: 1, y: 0}} // Horizontal gradient
       style={styles.container}

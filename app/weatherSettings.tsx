@@ -52,7 +52,7 @@ const WeatherSettings = () => {
 
   return (
     <LinearGradient
-      colors={['#1DAEFF', '#C5EEFF']}
+      colors={['#6908d4', '#e3ccfd']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}

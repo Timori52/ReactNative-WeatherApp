@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { TemperatureUnit } from '../app/weatherSettings';
+import { formatTemp } from './CurrentWeather';
 
 type DayForecast = {
   day: string;
@@ -9,16 +10,7 @@ type DayForecast = {
   low: number;
 };
 
-type DailyForecastProps = {
-  data: DayForecast[];
-  unit: TemperatureUnit;
-};
 
-// Helper function to format temperature
-const formatTemp = (temp: number, unit: TemperatureUnit): string => {
-  const symbol = unit === 'celsius' ? '°C' : '°F';
-  return `${temp}${symbol}`;
-};
 
 const DailyForecast: React.FC<DailyForecastProps> = ({ data, unit = 'celsius' }) => {
   return (
